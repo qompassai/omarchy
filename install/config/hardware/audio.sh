@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+#https://cateee.net/lkddb/web-lkddb/SND_SOC_DMIC.html
+#https://www.kernel.org/doc/html/v5.9/sound/soc/machine.html
 set -euo pipefail
 systemctl --user enable pipewire pipewire-pulse wireplumber --now
 pipewire-audio
