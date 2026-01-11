@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
-#https://cateee.net/lkddb/web-lkddb/SND_SOC_DMIC.html
+# /qompassai/arch/omarchy/install/config/hardware/audio.sh
+# Qompass AI Omarchy Audio PR
+# Copyright (C) 2026 Qompass AI, All rights reserved
+# ----------------------------------------
+# Reference: https://cateee.net/lkddb/web-lkddb/SND_SOC_DMIC.html
 #https://www.kernel.org/doc/html/v5.9/sound/soc/machine.html
 set -euo pipefail
+AUDIO_PACKAGES=(
+  pipewire-audio
+)
+omarchy-pkg-add "${AUDIO_PACKAGES[@]}"
 systemctl --user enable pipewire pipewire-pulse wireplumber --now
 pipewire-audio
+MODPROBE_BLACKLIST="/etc/modprobe.d/blacklist.conf"
 PIPEWIRE_CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/pipewire.conf.d"
 WIREPLUMBER_CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/wireplumber.conf.d"
-MODPROBE_BLACKLIST="/etc/modprobe.d/blacklist.conf"
 mkdir -p "$PIPEWIRE_CONF_DIR" "$WIREPLUMBER_CONF_DIR"
 cat > "${PIPEWIRE_CONF_DIR}/10-echo-cancel.conf" <<'EOF'
 context.modules = [
@@ -33,38 +41,36 @@ context.modules = [
   }
 ]
 EOF
-cat > "${PIPEWIRE_CONF_DIR}/20-rnnoise.conf" <<'EOF'
-context.modules = [
-  { name = libpipewire-module-filter-chain
-    args = {
-      node.description = "RNNoise Mic"
-      node.name        = "rnnoise_mic"
-      media.class      = "Audio/Source"
-
-      filter.graph = {
-        nodes = [
-          {
-            type   = "ladspa"
-            name   = "rnnoise"
-            plugin = "/usr/lib/ladspa/librnnoise_ladspa.so"
-            label  = "noise_suppressor_mono"
-            control = {
-              "VAD Threshold (%)"          = 80.0
-              "VAD Grace Period (ms)"      = 200
-              "Retroactive VAD Grace (ms)" = 0
-            }
-          }
-        ]
-      }
-      capture.props = {
-        node.name   = "capture.rnnoise_source"
-        node.target = "echo_cancel_source"
+cat > "${PIPEWIRE_CONF_DIR}/monitor_alsa.conf" <<'EOF'
+monitor.alsa.rules = [
+  {
+    matches = [
+      { device.name = "~alsa_card.*" }
+    ]
+    actions = {
+      update-props = {
+        api.alsa.use-acp = true
+        api.alsa.use-ucm = false
       }
     }
-    flags = [ ifexists ]
+  }
+  {
+    matches = [
+      { node.name = "audiorelay-virtual-mic-sink" }
+    ]
+    actions = {
+      update-props = {
+        "priority.driver"  = 2000
+        "priority.session" = 2000
+        "node.description" = "AudioRelay Virtual Mic"
+        "media.role"       = "communication"
+      }
+    }
   }
 ]
 EOF
 sudo tee "$MODPROBE_BLACKLIST" >/dev/null <<'EOF'
-blacklist pcspkr
+blacklist snd_soc_dmic
+blacklist snd_acp_legacy_mach
+blacklist snd_acp_mac
 EOF
